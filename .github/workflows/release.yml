@@ -47,17 +47,16 @@ jobs:
           echo "Release tag: '$RELEASE_TAG'"
 
           if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error::Invalid release tag '$RELEASE_TAG'. Expected vX.Y.Z, for example v3.0.1."
+            echo "::error::Invalid release tag '$RELEASE_TAG'. Expected vX.Y.Z, for example v3.0.2."
             exit 1
           fi
 
           VER="${RELEASE_TAG#v}"
 
-          # Validate before using the version in assembly attributes.
           python3 - "$VER" <<'PY'
           import sys
 
-          version = sys.argv[1]
+          _, version = sys.argv
           parts = [int(part) for part in version.split(".")]
 
           if any(part > 65534 for part in parts):
@@ -68,7 +67,7 @@ jobs:
           print(f"Validated version: {version}")
           PY
 
-          # Make VER available to subsequent steps.
+          # Make the version available to subsequent steps.
           printf 'VER=%s\n' "$VER" >> "$GITHUB_ENV"
 
           sed -i \
@@ -89,6 +88,7 @@ jobs:
       - name: Sensor library
         run: |
           set -euo pipefail
+
           python3 tools/get_lhm.py
 
       - name: Build
@@ -129,7 +129,7 @@ jobs:
           for f in BatteryWidget.exe BatteryWidget.exe.sha256; do
             test -s "out/$f"
 
-            # Find an existing asset with the same name.
+            # Find existing assets with the same name.
             curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
@@ -141,16 +141,18 @@ jobs:
           import json
           import sys
 
-          with open(sys.argv[1], encoding="utf-8") as handle:
+          _, assets_path, filename = sys.argv
+
+          with open(assets_path, encoding="utf-8") as handle:
               assets = json.load(handle)
 
           for asset in assets:
-              if asset["name"] == sys.argv[2]:
+              if asset["name"] == filename:
                   print(asset["id"])
           PY
             )"
 
-            # Remove assets from an earlier attempt.
+            # Remove matching assets from an earlier attempt.
             for id in $ASSET_IDS; do
               echo "Removing existing asset '$f', ID $id"
 
@@ -161,7 +163,7 @@ jobs:
                 "$API/assets/$id"
             done
 
-            # Upload the new asset to the release that triggered this job.
+            # Upload to the release that triggered this job.
             curl --fail-with-body --silent --show-error \
               -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
