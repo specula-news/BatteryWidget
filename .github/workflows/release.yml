@@ -8,10 +8,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - uses: actions/checkout@v4
       - name: Compiler (Mono, builds for .NET Framework 4.8)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update        # Ubuntu would rebuild its manual index for minutes
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends mono-devel
+          mcs --version
       - name: Version from the tag, update source from this repository
         run: |
           VER="${GITHUB_REF_NAME#v}"
