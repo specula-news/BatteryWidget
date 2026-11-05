@@ -1,0 +1,33 @@
+# Publishing a release (tag vX.Y.Z) builds BatteryWidget.exe and attaches it – every installed copy then offers the update.
+name: Build and publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler (Mono, builds for .NET Framework 4.8)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-devel
+      - name: Version from the tag, update source from this repository
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          sed -i "s/public const string Version = \"[0-9.]*\";/public const string Version = \"$VER\";/" src/App.cs
+          sed -i "s/AssemblyVersion(\"[0-9.]*\")/AssemblyVersion(\"$VER.0\")/; s/AssemblyFileVersion(\"[0-9.]*\")/AssemblyFileVersion(\"$VER.0\")/" src/App.cs
+          sed -i "s|public const string DefaultRepo = \"[^\"]*\";|public const string DefaultRepo = \"$GITHUB_REPOSITORY\";|" src/Updater.cs
+      - name: Sensor library
+        run: python3 tools/get_lhm.py
+      - name: Build
+        run: |
+          python3 res/make_res.py res/icon.ico res/app.res "$VER"
+          mkdir -p out && bash build.sh out/BatteryWidget.exe
+          test -f out/BatteryWidget.exe
+          cd out && sha256sum BatteryWidget.exe > BatteryWidget.exe.sha256 && cat BatteryWidget.exe.sha256
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" out/BatteryWidget.exe out/BatteryWidget.exe.sha256 --clobber
