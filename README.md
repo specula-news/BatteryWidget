@@ -1,5 +1,10 @@
 # Battery Widget 3.3.0 (C#)
 
+<img width="771" height="785" alt="image" src="https://github.com/user-attachments/assets/8790fe57-0e12-4c8d-be66-015bd4fd6132" />
+<img width="443" height="759" alt="image" src="https://github.com/user-attachments/assets/27319cba-6cff-4f73-bbb3-2e867299684c" />
+<img width="1174" height="1549" alt="image" src="https://github.com/user-attachments/assets/1b40907e-7da1-442d-8edc-aa191e493d78" />
+
+
 One portable file: `BatteryWidget.exe`. Runs on Windows 10 and 11 as it is – no installation, no other software.
 Settings are kept next to the exe (`BatteryWidget.json`, `SystemMonitor.json`); the first start imports the settings of the
 earlier (Python) version.
