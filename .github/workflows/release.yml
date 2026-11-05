@@ -37,4 +37,8 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" out/BatteryWidget.exe out/BatteryWidget.exe.sha256 --clobber
+        run: |
+          # the release this build belongs to; if it's gone (deleted, or still a draft), make it
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Battery Widget $VER" --notes "Battery Widget $VER"
+          gh release upload "$GITHUB_REF_NAME" out/BatteryWidget.exe out/BatteryWidget.exe.sha256 --clobber --repo "$GITHUB_REPOSITORY"
