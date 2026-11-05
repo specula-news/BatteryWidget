@@ -1,0 +1,52 @@
+# Publishing a release (tag vX.Y.Z) builds BatteryWidget.exe and attaches it – every installed copy then offers the update.
+name: Build and publish
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler (Mono, builds for .NET Framework 4.8)
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update        # Ubuntu would rebuild its manual index for minutes
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends mono-devel
+          mcs --version
+      - name: Version from the tag, update source from this repository
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          sed -i "s/public const string Version = \"[0-9.]*\";/public const string Version = \"$VER\";/" src/App.cs
+          sed -i "s/AssemblyVersion(\"[0-9.]*\")/AssemblyVersion(\"$VER.0\")/; s/AssemblyFileVersion(\"[0-9.]*\")/AssemblyFileVersion(\"$VER.0\")/" src/App.cs
+          sed -i "s|public const string DefaultRepo = \"[^\"]*\";|public const string DefaultRepo = \"$GITHUB_REPOSITORY\";|" src/Updater.cs
+      - name: Sensor library
+        run: python3 tools/get_lhm.py
+      - name: Build
+        run: |
+          python3 res/make_res.py res/icon.ico res/app.res "$VER"
+          mkdir -p out && bash build.sh out/BatteryWidget.exe
+          test -f out/BatteryWidget.exe
+          cd out && sha256sum BatteryWidget.exe > BatteryWidget.exe.sha256 && cat BatteryWidget.exe.sha256
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          # straight to the release that started this build (by its id – nothing to look up)
+          echo "release $GITHUB_REF_NAME, id $RELEASE_ID"
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY/releases"
+          for f in BatteryWidget.exe BatteryWidget.exe.sha256; do
+            for id in $(curl -s -H "Authorization: Bearer $GH_TOKEN" "$API/$RELEASE_ID/assets" | python3 -c "import json,sys; print(' '.join(str(a['id']) for a in json.load(sys.stdin) if a['name']=='$f'))"); do
+              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" "$API/assets/$id"      # an earlier attempt's file
+            done
+            curl -sSf -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+              --data-binary "@out/$f" "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$f" > /dev/null
+            echo "attached $f"
+          done
