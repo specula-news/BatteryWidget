@@ -37,8 +37,16 @@ jobs:
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
         run: |
-          # the release this build belongs to; if it's gone (deleted, or still a draft), make it
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Battery Widget $VER" --notes "Battery Widget $VER"
-          gh release upload "$GITHUB_REF_NAME" out/BatteryWidget.exe out/BatteryWidget.exe.sha256 --clobber --repo "$GITHUB_REPOSITORY"
+          # straight to the release that started this build (by its id – nothing to look up)
+          echo "release $GITHUB_REF_NAME, id $RELEASE_ID"
+          API="https://api.github.com/repos/$GITHUB_REPOSITORY/releases"
+          for f in BatteryWidget.exe BatteryWidget.exe.sha256; do
+            for id in $(curl -s -H "Authorization: Bearer $GH_TOKEN" "$API/$RELEASE_ID/assets" | python3 -c "import json,sys; print(' '.join(str(a['id']) for a in json.load(sys.stdin) if a['name']=='$f'))"); do
+              curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" "$API/assets/$id"      # an earlier attempt's file
+            done
+            curl -sSf -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+              --data-binary "@out/$f" "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$f" > /dev/null
+            echo "attached $f"
+          done
