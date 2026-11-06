@@ -10,14 +10,14 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("Battery Widget")]
 [assembly: System.Reflection.AssemblyProduct("Battery Widget")]
 [assembly: System.Reflection.AssemblyDescription("Battery levels for wireless gear + a system monitor")]
-[assembly: System.Reflection.AssemblyVersion("3.6.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.6.2.0")]
+[assembly: System.Reflection.AssemblyVersion("4.0.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("4.0.0.0")]
 
 namespace BatteryWidget
 {
     public static class Program
     {
-        public const string Version = "3.6.2";
+        public const string Version = "4.0.0";
         public const string AppId = "BatteryWidget";
         static Icon _icon;
         public static Icon AppIcon => _icon ?? (_icon = Draw.MakeIcon(32));
@@ -74,6 +74,7 @@ namespace BatteryWidget
         public readonly Cfg Cfg;                 // the battery widget's settings – also holds the on/off switches
         public BatteryView Battery;
         public SystemView System;
+        public AlwaysOnTop Pin;
         public WeatherView Weather;
         public NotifyIcon Tray;
         readonly bool _demo;
@@ -82,6 +83,8 @@ namespace BatteryWidget
 
         public void Start()
         {
+            if (!_demo && Cfg.NumOrNull("privacy_seen") == null)            // first start: what goes online, and the choice
+                using (var f = new PrivacyForm(this, Themes.Resolve(Cfg.Str("theme", "Dark") == "Auto" ? "Dark" : Cfg.Str("theme", "Dark"), Cfg.Str("accent", ""), false, true))) f.ShowDialog();
             Tray = new NotifyIcon { Icon = Program.AppIcon, Text = "Battery Widget", Visible = true, ContextMenuStrip = new ContextMenuStrip() };
             Tray.ContextMenuStrip.Opening += (s, e) => { e.Cancel = false; FillTray(Tray.ContextMenuStrip); };
             Tray.MouseUp += (s, e) => { if (e.Button == MouseButtons.Left) ToggleVisible(); };
@@ -91,6 +94,8 @@ namespace BatteryWidget
             if (Cfg.Bool("show_battery", true)) Battery.Start(); else if (poller != null) poller.Paused = true;
             poller?.Start();
             if (_demo) WidgetWindow.Later(200, () => Battery.OnReadings(Demo.Readings()));
+            Pin = new AlwaysOnTop(this);
+            if (!_demo) Pin.Start();
             if (Cfg.Bool("show_system", true)) WidgetWindow.Later(50, StartSystem);
             if (Cfg.Bool("show_weather", true)) WidgetWindow.Later(120, StartWeather);
             if (!_demo && Cfg.Bool("update_check", true)) WidgetWindow.Later(12000, () => CheckUpdates(false));   // quietly, in the background
@@ -232,6 +237,7 @@ namespace BatteryWidget
         {
             var w = Menus.Sub(it, "Widgets", t);
             Switches(w.DropDownItems);
+            Pin?.Menu(it, t);
             UpdateItems(it, t);
             if (Native.OnWindows)
             {
@@ -270,6 +276,7 @@ namespace BatteryWidget
                 foreach (var x in tmp.Items.Cast<ToolStripItem>().ToList()) s.DropDownItems.Add(x);
             }
             Menus.Sep(it);
+            Pin?.Menu(it, t);
             UpdateItems(it, t);
             if (Native.OnWindows)
             {
@@ -298,6 +305,7 @@ namespace BatteryWidget
         static readonly string[] Shared = { "theme", "accent", "blend" };
         public void ThemeChanged(WidgetWindow src, string key, object value)
         {
+            WidgetWindow.Later(50, () => Pin?.Restyle());                   // the border follows the theme color
             if (!Cfg.Bool("link_themes", true) || !Shared.Contains(key)) return;
             foreach (var w in Widgets.Where(x => x != src)) { w.C[key] = value; w.Save(); w.InvalidateTheme(); w.Relayout(); }
         }
@@ -390,6 +398,7 @@ namespace BatteryWidget
         {
             SaveAll();
             foreach (var w in new WidgetWindow[] { Weather, System, Battery }) if (w != null) try { w.Shutdown(); } catch { }
+            try { Pin?.Dispose(); } catch { }                                 // pinned windows go back to normal
             if (Tray != null) { Tray.Visible = false; Tray.Dispose(); }
             Application.DoEvents();
             WinUtil.HardExit(0);
