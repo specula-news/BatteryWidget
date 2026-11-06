@@ -42,7 +42,7 @@ namespace BatteryWidget
         List<WidgetWindow> _group = new List<WidgetWindow>(); List<Point> _groupStart = new List<Point>();
         public bool WallpaperMode => !TaskbarMode && C != null && C.Str("stacking", "bottom") == "wallpaper";
         public static int AcrylicTint = 215;
-        public bool Blend => !TaskbarMode && C != null && (C.Bool("blend") || Pal.Glass);
+        public bool Blend => !TaskbarMode && C != null && C.Bool("blend");
         bool KeyPainted => (Embedded && !_childAlpha) || (TaskbarMode && SimLight.HasValue);
         bool OwnPaint => (Embedded && !_childAlpha) || WallpaperMode;
         public virtual float VisualInset => 0;

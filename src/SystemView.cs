@@ -615,6 +615,7 @@ namespace BatteryWidget
             }
             Color bg = Pal.Bg, end, panel, line;
             if (Pal.Metal) { end = Color.FromArgb(bg.A, 24, 32, 43); panel = Color.FromArgb(95, 0, 0, 0); line = Color.FromArgb(48, 201, 161, 90); }
+            else if (Pal.Glass) { end = bg; panel = Color.FromArgb(60, 0, 0, 0); line = Color.FromArgb(26, 255, 255, 255); }   // Windows 11 acrylic: one even dark glass
             else
             {
                 var acc = Pal.Accent;

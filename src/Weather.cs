@@ -389,6 +389,7 @@ namespace BatteryWidget
             Color bg = Pal.Bg, acc = Pal.Accent;
             Color end = Pal.Metal ? Color.FromArgb(bg.A, 24, 32, 43)
                 : Color.FromArgb(bg.A, (int)Math.Min(255, bg.R * 0.8 + acc.R * 0.11), (int)Math.Min(255, bg.G * 0.8 + acc.G * 0.11), (int)Math.Min(255, bg.B * 0.8 + acc.B * 0.17 + 18));
+            if (Pal.Glass) end = bg;
             using (var path = Draw.Round(card, rad))
             {
                 if (!Backdrop(g, path, card)) using (var gb = new LinearGradientBrush(card, bg, end, LinearGradientMode.ForwardDiagonal)) g.FillPath(gb, path);
