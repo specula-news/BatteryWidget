@@ -41,6 +41,7 @@ namespace BatteryWidget
         IntPtr _layer;                                          // the wallpaper layer when we live behind the desktop icons
         List<WidgetWindow> _group = new List<WidgetWindow>(); List<Point> _groupStart = new List<Point>();
         public bool WallpaperMode => !TaskbarMode && C != null && C.Str("stacking", "bottom") == "wallpaper";
+        public static int AcrylicTint = 215;
         public bool Blend => !TaskbarMode && C != null && (C.Bool("blend") || Pal.Glass);
         bool KeyPainted => (Embedded && !_childAlpha) || (TaskbarMode && SimLight.HasValue);
         bool OwnPaint => (Embedded && !_childAlpha) || WallpaperMode;
@@ -82,8 +83,9 @@ namespace BatteryWidget
             bool ok = Wallpaper.Paint(g, r, new Rectangle(_x + (int)r.X, _y + (int)r.Y, Math.Max(1, (int)r.Width), Math.Max(1, (int)r.Height)), true);
             if (ok)
             {
-                using (var b = new SolidBrush(Color.FromArgb(Math.Min(140, (int)(Pal.Bg.A * 0.48)), Pal.Bg.R, Pal.Bg.G, Pal.Bg.B))) g.FillPath(b, shape);
-                using (var lg = new LinearGradientBrush(r, Color.FromArgb(30, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical)) g.FillPath(lg, shape);
+                int tint = Pal.Glass ? AcrylicTint : Math.Min(140, (int)(Pal.Bg.A * 0.48));       // Windows acrylic is a dense dark layer
+                using (var b = new SolidBrush(Color.FromArgb(tint, Pal.Bg.R, Pal.Bg.G, Pal.Bg.B))) g.FillPath(b, shape);
+                using (var lg = new LinearGradientBrush(r, Color.FromArgb(Pal.Glass ? 7 : 30, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Vertical)) g.FillPath(lg, shape);
             }
             g.Restore(st);
             return ok;

@@ -45,7 +45,7 @@ namespace BatteryWidget
             { "Forest", new Theme("#F2101A14", "#FF16241B", "#FF22382A", "#FFE6F2E8", "#FF8FB39A", "#FF7FD99A", "#FF7FD99A", "#FFE8C468", "#FFEF7D6B", "#FF203327") },
             { "Mono", new Theme("#F2161616", "#FF1E1E1E", "#FF2E2E2E", "#FFFFFFFF", "#FF9A9A9A", "#FFFFFFFF", "#FFE8E8E8", "#FFBDBDBD", "#FFFF5A5A", "#FF333333") },
             { "Gold", new Theme("#F00A0C10", "#FF15171C", "#73C9A15A", "#FFF4ECDD", "#FF9D9484", "#FFD9B45F", "#FFD9B45F", "#FFE8913F", "#FFE5484D", "#30C9A15A", true) },
-            { "Acrylic", new Theme("#B81F1F23", "#FF2B2B2E", "#2EFFFFFF", "#FFFFFFFF", "#FFC8C8CC", "#FF60CDFF", "#FF6CCB5F", "#FFFCE100", "#FFFF99A4", "#33FFFFFF") { Glass = true } },
+            { "Acrylic", new Theme("#B8121214", "#FF2B2B2E", "#2EFFFFFF", "#FFFFFFFF", "#FFC8C8CC", "#FF60CDFF", "#FF6CCB5F", "#FFFCE100", "#FFFF99A4", "#33FFFFFF") { Glass = true } },
             { "Twilight", new Theme("#EE3B2E4A", "#FF2A2237", "#30FFFFFF", "#FFF4F2F8", "#FFA9A7BA", "#FF4FB0F0", "#FF35D0BC", "#FFF39A55", "#FFFF6B7A", "#2EFFFFFF") },
         };
 

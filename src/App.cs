@@ -10,14 +10,14 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("Battery Widget")]
 [assembly: System.Reflection.AssemblyProduct("Battery Widget")]
 [assembly: System.Reflection.AssemblyDescription("Battery levels for wireless gear + a system monitor")]
-[assembly: System.Reflection.AssemblyVersion("4.1.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("4.1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("4.1.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("4.1.1.0")]
 
 namespace BatteryWidget
 {
     public static class Program
     {
-        public const string Version = "4.1.0";
+        public const string Version = "4.1.1";
         public const string AppId = "BatteryWidget";
         static Icon _icon;
         public static Icon AppIcon => _icon ?? (_icon = Draw.MakeIcon(32));
