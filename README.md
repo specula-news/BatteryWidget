@@ -60,3 +60,6 @@ The repository must be **public** so the apps can read its releases.
 Not supported yet: Corsair wireless mice/keyboards, Sony INZONE, Audeze, Roccat headsets.
 
 Build by hand (Linux/Mono): `python3 tools/get_lhm.py && python3 res/make_res.py res/icon.ico res/app.res 3.6.1 && ./build.sh out/BatteryWidget.exe`
+
+## Code signing policy
+See [CODE_SIGNING.md](CODE_SIGNING.md) – including the privacy policy.
