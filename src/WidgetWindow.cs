@@ -41,7 +41,7 @@ namespace BatteryWidget
         IntPtr _layer;                                          // the wallpaper layer when we live behind the desktop icons
         List<WidgetWindow> _group = new List<WidgetWindow>(); List<Point> _groupStart = new List<Point>();
         public bool WallpaperMode => !TaskbarMode && C != null && C.Str("stacking", "bottom") == "wallpaper";
-        public bool Blend => !TaskbarMode && C != null && C.Bool("blend");
+        public bool Blend => !TaskbarMode && C != null && (C.Bool("blend") || Pal.Glass);
         bool KeyPainted => (Embedded && !_childAlpha) || (TaskbarMode && SimLight.HasValue);
         bool OwnPaint => (Embedded && !_childAlpha) || WallpaperMode;
         public virtual float VisualInset => 0;
@@ -748,8 +748,38 @@ namespace BatteryWidget
         {
             readonly Theme t;
             public Renderer(Theme th) : base(new Colors(th)) { t = th; RoundedEdges = false; }
+            // Acrylic: everything drawn with real transparency so the blur shows through (GDI text would vanish)
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                if (!t.Glass) { base.OnRenderToolStripBackground(e); return; }
+                e.Graphics.Clear(Color.FromArgb(0, 0, 0, 0));
+                using (var b = new SolidBrush(Color.FromArgb(70, 28, 28, 30))) e.Graphics.FillRectangle(b, e.AffectedBounds);
+            }
+            protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { if (!t.Glass) base.OnRenderImageMargin(e); }
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { if (!t.Glass) base.OnRenderToolStripBorder(e); }
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (!t.Glass) { base.OnRenderMenuItemBackground(e); return; }
+                if (!e.Item.Selected || !e.Item.Enabled) return;
+                var r = new RectangleF(4, 1, e.Item.Width - 8, e.Item.Height - 2);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using (var b = new SolidBrush(Color.FromArgb(38, 255, 255, 255))) using (var p = Draw.Round(r, 4)) e.Graphics.FillPath(b, p);
+            }
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                if (!t.Glass) { base.OnRenderSeparator(e); return; }
+                using (var p = new Pen(Color.FromArgb(40, 255, 255, 255))) e.Graphics.DrawLine(p, 8, e.Item.Height / 2, e.Item.Width - 8, e.Item.Height / 2);
+            }
             protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
             {
+                if (t.Glass)
+                {
+                    e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                    var col = !e.Item.Enabled ? Color.FromArgb(150, 255, 255, 255) : Color.White;
+                    using (var b = new SolidBrush(col)) using (var f = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+                        e.Graphics.DrawString(e.Text, e.TextFont, b, e.TextRectangle, f);
+                    return;
+                }
                 bool sel = e.Item.Selected && e.Item.Enabled;
                 Color on = t.Accent.GetBrightness() > 0.6f ? Color.Black : Color.White;
                 e.TextColor = !e.Item.Enabled ? Menus.Solid(t, t.Sub) : sel ? on : Color.FromArgb(255, t.Text);
@@ -767,8 +797,31 @@ namespace BatteryWidget
                 }
             }
         }
+        [StructLayout(LayoutKind.Sequential)] struct AccentPolicy { public int State, Flags, Color, Anim; }
+        [StructLayout(LayoutKind.Sequential)] struct CompData { public int Attr; public IntPtr Data; public int Size; }
+        [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr h, ref CompData d);
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int v, int size);
+
+        /// <summary>Windows 11 look for a menu: rounded corners; in the Acrylic theme, real acrylic behind it.</summary>
+        static void Win11(IntPtr h, Theme t)
+        {
+            if (!Native.OnWindows || h == IntPtr.Zero) return;
+            try { int round = 2; DwmSetWindowAttribute(h, 33, ref round, 4); } catch { }
+            if (!t.Glass) return;
+            try
+            {
+                var ap = new AccentPolicy { State = 4, Flags = 2, Color = unchecked((int)0x99231F1F) };   // acrylic blur, dark tint (ABGR)
+                int size = Marshal.SizeOf(ap); IntPtr p = Marshal.AllocHGlobal(size);
+                try { Marshal.StructureToPtr(ap, p, false); var d = new CompData { Attr = 19, Data = p, Size = size }; SetWindowCompositionAttribute(h, ref d); }
+                finally { Marshal.FreeHGlobal(p); }
+            }
+            catch { }
+        }
+
         public static void Style(ToolStrip m, Theme t)
         {
+            m.HandleCreated += (s, e) => Win11(m.Handle, t);
+            if (m is ToolStripDropDown dd) dd.Opened += (s, e) => Win11(dd.Handle, t);
             m.Renderer = new Renderer(t);
             m.BackColor = Solid(t, t.Card);
             m.ForeColor = Color.FromArgb(255, t.Text);
