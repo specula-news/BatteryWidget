@@ -1,8 +1,10 @@
-# Battery Widget 3.3.0 (C#)
+# Battery Widget (C#)
+<img width="1600" height="900" alt="ffeac4d3-bf39-46b4-b786-902343a2802b" src="https://github.com/user-attachments/assets/802874be-3dc9-45bc-91ea-22f102745992" />
+<img width="1630" height="657" alt="67598a59-4d53-4ade-8b89-0e7ea5bfd138" src="https://github.com/user-attachments/assets/0553be02-d40b-4c6f-b4b5-5710d4562544" />
+<img width="1500" height="360" alt="0892d2c2-9091-4ef2-ba07-da5c5e479d19" src="https://github.com/user-attachments/assets/84124508-2433-49d3-ac86-b16bc62ac5cd" />
+<img width="1034" height="640" alt="d1526732-b062-4618-8977-1274db7d949c" src="https://github.com/user-attachments/assets/8c98bbcd-32e5-4e36-be2f-b04f176b2259" />
 
-<img width="771" height="785" alt="image" src="https://github.com/user-attachments/assets/8790fe57-0e12-4c8d-be66-015bd4fd6132" />
-<img width="443" height="759" alt="image" src="https://github.com/user-attachments/assets/27319cba-6cff-4f73-bbb3-2e867299684c" />
-<img width="1174" height="1549" alt="image" src="https://github.com/user-attachments/assets/1b40907e-7da1-442d-8edc-aa191e493d78" />
+
 
 
 One portable file: `BatteryWidget.exe`. Runs on Windows 10 and 11 as it is – no installation, no other software.
