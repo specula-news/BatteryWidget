@@ -27,6 +27,9 @@ namespace BatteryWidget
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder sb, int n);
         [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string n);
+        public delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+        [DllImport("user32.dll")] public static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc f, uint pid, uint tid, uint flags);
+        [DllImport("user32.dll")] public static extern bool UnhookWinEvent(IntPtr h);
         [StructLayout(LayoutKind.Sequential)] public struct KBD { public uint vk, scan, flags, time; public IntPtr extra; }
     }
 
@@ -60,16 +63,18 @@ namespace BatteryWidget
         }
 
         /// <summary>Follows the window: position, minimized, closed – and stays just above it.</summary>
-        public void Sync(bool force)
+        public void Sync(bool force, bool raise = false)
         {
             if (!PinNative.IsWindow(Target)) { _owner.Forget(Target); return; }
-            if (PinNative.IsIconic(Target) || !Native.IsWindowVisible(Target)) { if (Visible) Hide(); return; }
+            if (PinNative.IsIconic(Target) || !Native.IsWindowVisible(Target) || _owner.Moving(Target)) { if (Visible) Hide(); return; }
             var f = Frame(Target);
             int t = _owner.Thickness;
             var outer = PinNative.IsZoomed(Target) ? f : Rectangle.Inflate(f, t, t);    // maximized: draw just inside the screen
-            if (force || outer != _last) { _last = outer; Render(outer, t, PinNative.IsZoomed(Target)); }
-            if (!Visible) Show();
-            Native.SetWindowPos(Handle, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            if (force || outer.Size != _last.Size) { _last = outer; Render(outer, t, PinNative.IsZoomed(Target)); raise = true; }
+            else if (outer.Location != _last.Location)                                  // only moved: slide it, no redraw
+            { _last = outer; Native.SetWindowPos(Handle, IntPtr.Zero, outer.X, outer.Y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE); }
+            if (!Visible) { Show(); raise = true; }
+            if (raise) Native.SetWindowPos(Handle, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         }
 
         void Render(Rectangle outer, int t, bool inside)
@@ -152,11 +157,24 @@ namespace BatteryWidget
     {
         readonly Suite _s;
         readonly Dictionary<IntPtr, PinBorder> _pins = new Dictionary<IntPtr, PinBorder>();
-        readonly Timer _timer = new Timer { Interval = 40 };
-        IntPtr _hook; PinNative.HookProc _proc;
+        readonly Timer _timer = new Timer { Interval = 250 };            // only notices closed/minimized windows; moves come from Windows' events
+        IntPtr _hook, _ev1, _ev2; PinNative.HookProc _proc; PinNative.WinEventProc _evProc;
+        IntPtr _moving;
+        public bool HideWhileMoving => C.Bool("aot_hide_moving", false);
+        public bool Moving(IntPtr h) => HideWhileMoving && _moving == h;
+
+        void OnEvent(IntPtr hook, uint ev, IntPtr h, int obj, int child, uint thread, uint time)
+        {
+            PinBorder b;
+            if (!_pins.TryGetValue(h, out b)) return;
+            if (ev == 0x000A) { _moving = h; if (HideWhileMoving && b.Visible) b.Hide(); }           // drag starts
+            else if (ev == 0x000B) { _moving = IntPtr.Zero; if (ShowBorder) b.Sync(false, true); } // drag ends
+            else if (ev == 0x0003) { if (ShowBorder) b.Sync(false, true); }                          // came to the front
+            else if (ev == 0x800B && obj == 0 && ShowBorder) b.Sync(false);                           // moved or resized: follow at once
+        }
         public static readonly string[] Shortcuts = { "Win+A", "Win+Ctrl+T", "Ctrl+Alt+T", "Win+Shift+A" };
 
-        public AlwaysOnTop(Suite s) { _s = s; _timer.Tick += (o, e) => { foreach (var b in _pins.Values.ToList()) b.Sync(false); }; }
+        public AlwaysOnTop(Suite s) { _s = s; _timer.Tick += (o, e) => { if (ShowBorder) foreach (var b in _pins.Values.ToList()) b.Sync(false); }; }
         Cfg C => _s.Cfg;
         public bool Enabled => C.Bool("aot_enabled", true);
         public string Shortcut => C.Str("aot_hotkey", "Win+A");
@@ -177,6 +195,9 @@ namespace BatteryWidget
             if (!Native.OnWindows) return;
             _proc = Hook;
             _hook = PinNative.SetWindowsHookEx(13, _proc, PinNative.GetModuleHandle(null), 0);          // WH_KEYBOARD_LL
+            _evProc = OnEvent;
+            _ev1 = PinNative.SetWinEventHook(0x0003, 0x000B, IntPtr.Zero, _evProc, 0, 0, 0);          // front, drag start/end
+            _ev2 = PinNative.SetWinEventHook(0x800B, 0x800B, IntPtr.Zero, _evProc, 0, 0, 0);          // location changes
             _timer.Start();
         }
 
@@ -278,6 +299,7 @@ namespace BatteryWidget
                 using (var d = new ColorDialog { Color = Color, FullOpen = true }) if (d.ShowDialog() == DialogResult.OK) Set("aot_color", Theme.Hex(d.Color));
             }, CustomColor != "", true, CustomColor != "" ? Draw.Swatch(Color) : null);
             Menus.Item(mi, "Rounded corners", () => Set("aot_round", !Rounded), Rounded);
+            Menus.Item(mi, "Hide the border while dragging", () => Set("aot_hide_moving", !HideWhileMoving), HideWhileMoving);
             Menus.Sep(mi);
             Menus.Item(mi, "Sound", () => { C["aot_sound"] = !Sound; C.Save(); if (Sound) Chime.Play(true, Volume); }, Sound);
             var vol = Menus.Sub(mi, "Sound volume", t);
@@ -295,6 +317,7 @@ namespace BatteryWidget
         {
             _timer.Stop();
             if (_hook != IntPtr.Zero) { PinNative.UnhookWindowsHookEx(_hook); _hook = IntPtr.Zero; }
+            if (_ev1 != IntPtr.Zero) PinNative.UnhookWinEvent(_ev1); if (_ev2 != IntPtr.Zero) PinNative.UnhookWinEvent(_ev2); _ev1 = _ev2 = IntPtr.Zero;
             foreach (var h in _pins.Keys.ToList()) Unpin(h, false);                                     // windows return to normal when the app quits
         }
     }

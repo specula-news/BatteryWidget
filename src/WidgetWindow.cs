@@ -755,7 +755,7 @@ namespace BatteryWidget
             {
                 if (!t.Glass) { base.OnRenderToolStripBackground(e); return; }
                 e.Graphics.Clear(Color.FromArgb(0, 0, 0, 0));
-                using (var b = new SolidBrush(Color.FromArgb(70, 28, 28, 30))) e.Graphics.FillRectangle(b, e.AffectedBounds);
+                using (var b = new SolidBrush(Color.FromArgb(222, 30, 30, 32))) e.Graphics.FillRectangle(b, e.AffectedBounds);   // dense enough for crisp text
             }
             protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { if (!t.Glass) base.OnRenderImageMargin(e); }
             protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { if (!t.Glass) base.OnRenderToolStripBorder(e); }
