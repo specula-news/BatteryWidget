@@ -196,8 +196,6 @@ namespace BatteryWidget
             _proc = Hook;
             _hook = PinNative.SetWindowsHookEx(13, _proc, PinNative.GetModuleHandle(null), 0);          // WH_KEYBOARD_LL
             _evProc = OnEvent;
-            _ev1 = PinNative.SetWinEventHook(0x0003, 0x000B, IntPtr.Zero, _evProc, 0, 0, 0);          // front, drag start/end
-            _ev2 = PinNative.SetWinEventHook(0x800B, 0x800B, IntPtr.Zero, _evProc, 0, 0, 0);          // location changes
             _timer.Start();
         }
 
@@ -223,7 +221,7 @@ namespace BatteryWidget
                     win == (Down(0x5B) || Down(0x5C)) && ctrl == Down(0x11) && shift == Down(0x10) && alt == Down(0x12))
                 {
                     if (win) { PinNative.keybd_event(0xFF, 0, 0, UIntPtr.Zero); PinNative.keybd_event(0xFF, 0, 2, UIntPtr.Zero); }   // keeps Start from opening
-                    _s.Battery?.BeginInvoke((Action)ToggleForeground);
+                    _s.OnUi(ToggleForeground);
                     return new IntPtr(1);                                                                // Windows doesn't see it (no Quick Settings)
                 }
             }
@@ -244,6 +242,21 @@ namespace BatteryWidget
 
         public static string Title(IntPtr h) { var sb = new StringBuilder(256); PinNative.GetWindowText(h, sb, 256); var t = sb.ToString().Trim(); return t == "" ? "Window" : t.Length > 60 ? t.Substring(0, 59) + "…" : t; }
 
+        /// <summary>Window events only while something is pinned (they fire for every window in Windows).</summary>
+        void Events(bool on)
+        {
+            if (!Native.OnWindows) return;
+            if (on && _ev1 == IntPtr.Zero)
+            {
+                _ev1 = PinNative.SetWinEventHook(0x0003, 0x000B, IntPtr.Zero, _evProc, 0, 0, 0);      // front, drag start/end
+                _ev2 = PinNative.SetWinEventHook(0x800B, 0x800B, IntPtr.Zero, _evProc, 0, 0, 0);      // location changes
+            }
+            else if (!on && _ev1 != IntPtr.Zero)
+            {
+                PinNative.UnhookWinEvent(_ev1); PinNative.UnhookWinEvent(_ev2); _ev1 = _ev2 = IntPtr.Zero;
+            }
+        }
+
         public void Pin(IntPtr h)
         {
             if (!Native.SetWindowPos(h, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE))
@@ -253,6 +266,7 @@ namespace BatteryWidget
             }
             var b = new PinBorder(this, h);
             _pins[h] = b;
+            Events(true);
             if (ShowBorder) b.Sync(true);
             if (Sound) Chime.Play(true, Volume);
             Toast.Show("up", "Always on top", Title(h), ThemeNow, 1800);
@@ -262,11 +276,12 @@ namespace BatteryWidget
         {
             PinBorder b;
             if (_pins.TryGetValue(h, out b)) { _pins.Remove(h); try { b.Close(); b.Dispose(); } catch { } }
+            if (_pins.Count == 0) Events(false);
             if (PinNative.IsWindow(h)) Native.SetWindowPos(h, Native.HWND_NOTOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
             if (say) { if (Sound) Chime.Play(false, Volume); Toast.Show("down", "No longer on top", Title(h), ThemeNow, 1500); }
         }
 
-        public void Forget(IntPtr h) { PinBorder b; if (_pins.TryGetValue(h, out b)) { _pins.Remove(h); try { b.Close(); b.Dispose(); } catch { } } }
+        public void Forget(IntPtr h) { PinBorder b; if (_pins.TryGetValue(h, out b)) { _pins.Remove(h); try { b.Close(); b.Dispose(); } catch { } } if (_pins.Count == 0) Events(false); }
 
         public void Restyle()
         {

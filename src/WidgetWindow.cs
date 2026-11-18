@@ -169,7 +169,8 @@ namespace BatteryWidget
             using (var b = new Bitmap(1, 1)) using (var g = Graphics.FromImage(b)) { Draw.Hq(g); sz = DoLayout(g); }
             _size = new Size(Math.Max(4, (int)Math.Ceiling(sz.Width)), Math.Max(4, (int)Math.Ceiling(sz.Height)));
             Render();
-            if (TaskbarMode) DockToTaskbar(); else ApplyBounds();
+            if (TaskbarMode && !(Dragging && _dragMoved)) DockToTaskbar();     // mid-drag: stay under the mouse, don't jump back
+            else ApplyBounds();
             if (WallpaperMode && IsHandleCreated) using (var shape = VisualShape()) Desk.SetRegion(this, shape);   // only the widget itself shows
         }
 
@@ -618,9 +619,12 @@ namespace BatteryWidget
             }
         }
 
+        ContextMenuStrip _lastMenu;
+        /// <summary>The previous menu is freed when the next one opens (freeing it on close could pull it away mid-click).</summary>
+        ContextMenuStrip Fresh() { try { _lastMenu?.Dispose(); } catch { } _lastMenu = NewMenu(); return _lastMenu; }
         void ShowMenu()
         {
-            var m = NewMenu();
+            var m = Fresh();
             FillMenu(m, true);
             m.Show(Cursor.Position);
         }
@@ -658,7 +662,7 @@ namespace BatteryWidget
 
         void ShowMoonMenu()
         {
-            var m = NewMenu();
+            var m = Fresh();
             FillScreenMenu(m.Items);
             var box = MoonRect ?? new RectangleF(0, 0, Width, Height);
             var top = PointToScreen(new Point((int)box.Left, (int)box.Top));
@@ -710,7 +714,7 @@ namespace BatteryWidget
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _tick.Dispose(); _z.Dispose(); _tip.Dispose(); _frame?.Dispose(); }
+            if (disposing) { _tick.Dispose(); _z.Dispose(); _tip.Dispose(); _frame?.Dispose(); _lastMenu?.Dispose(); }
             base.Dispose(disposing);
         }
     }
@@ -822,8 +826,13 @@ namespace BatteryWidget
 
         public static void Style(ToolStrip m, Theme t)
         {
-            m.HandleCreated += (s, e) => Win11(m.Handle, t);
-            if (m is ToolStripDropDown dd) dd.Opened += (s, e) => Win11(dd.Handle, t);
+            bool first = !(m.Tag is Theme);
+            m.Tag = t;                                                     // the handlers below read the current theme from here
+            if (first)
+            {
+                m.HandleCreated += (s, e) => Win11(m.Handle, m.Tag as Theme ?? t);
+                if (m is ToolStripDropDown dd) dd.Opened += (s, e) => Win11(dd.Handle, dd.Tag as Theme ?? t);
+            }
             m.Renderer = new Renderer(t);
             m.BackColor = Solid(t, t.Card);
             m.ForeColor = Color.FromArgb(255, t.Text);

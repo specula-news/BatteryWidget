@@ -271,8 +271,8 @@ namespace BatteryWidget
                     json = WxApi.Forecast(lat.Value, lon.Value, C.Bool("fahrenheit"), C.Str("wind", "ms"));
                 }
                 catch (Exception ex) { err = ex.Message; }
-                if (IsHandleCreated) BeginInvoke((Action)(() => Arrived(json, found, err)));
-                else _busy = false;
+                try { if (IsHandleCreated && !IsDisposed) BeginInvoke((Action)(() => Arrived(json, found, err))); else _busy = false; }
+                catch { _busy = false; }                                // switched off while fetching
             }) { IsBackground = true }.Start();
         }
 

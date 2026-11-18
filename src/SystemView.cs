@@ -326,6 +326,29 @@ namespace BatteryWidget
         SizeF LayoutDesktop(Graphics g, List<Tile> tiles)
         {
             float s = S;
+            string look = C.Str("style");
+            bool bg = C.Bool("background", true);
+            if (look == "minimal" || look == "lines")               // one clean column: label left, value right (lines: a thin bar under it)
+            {
+                bool lines = look == "lines";
+                _fp = (lines ? 15 : 14) * s; _lp = 12 * s;
+                _lw = tiles.Max(t => LabelW(g, t, _lp)); _vw = tiles.Max(t => TextW(g, t, _fp));
+                float pad = bg ? 14 * s : 6 * s, wcol = Math.Max(lines ? 210 * s : 0, _lw + 20 * s + _vw), rowH = lines ? 36 * s : 24 * s, y0 = pad;
+                foreach (var t in tiles) { Add(new RectangleF(pad, y0, wcol, rowH), t); y0 += rowH; }
+                _geo = look; _radius = 14 * s;
+                return new SizeF(wcol + 2 * pad, y0 + pad - (lines ? 4 * s : 0));
+            }
+            if (look == "tiles")                                      // big numbers in a grid
+            {
+                _fp = 24 * s; _lp = 11.5f * s; _isz = 13 * s;
+                int nt = tiles.Count, cl = C.Int("columns"); cl = cl <= 0 ? Math.Min(2, nt) : Math.Max(1, Math.Min(cl, nt));
+                float cw0 = Math.Max(tiles.Max(t => TextW(g, t, _fp)), tiles.Max(t => _isz + 5 * s + LabelW(g, t, _lp))) + 4 * s, ch0 = _lp * 1.6f + _fp * 1.25f;
+                float pad = bg ? 16 * s : 6 * s, gx0 = 22 * s, gy0 = 14 * s;
+                int rw = (int)Math.Ceiling(nt / (double)cl);
+                for (int i = 0; i < nt; i++) Add(new RectangleF(pad + (i % cl) * (cw0 + gx0), pad + (i / cl) * (ch0 + gy0), cw0, ch0), tiles[i]);
+                _geo = "tiles"; _radius = 16 * s;
+                return new SizeF(pad * 2 + cl * cw0 + (cl - 1) * gx0, pad * 2 + rw * ch0 + (rw - 1) * gy0);
+            }
             bool text = C.Str("style") == "text";
             _labels = C.Bool("show_labels", true);
             int n = tiles.Count, cols = C.Int("columns");
@@ -498,7 +521,9 @@ namespace BatteryWidget
                 var t = (Tile)c.Item;
                 var st = g.Save();
                 float a = t.Online || t.Kind == "__scan__" ? 1 : 0.45f;
-                if (_geo == "tb_icons") TbIcon(g, c.R, t, a);
+                if (_geo == "minimal" || _geo == "lines") MinimalRow(g, c.R, t, a, _geo == "lines");
+                else if (_geo == "tiles") BigTile(g, c.R, t, a);
+                else if (_geo == "tb_icons") TbIcon(g, c.R, t, a);
                 else if (_geo == "text") TextRow(g, c.R, t, a);
                 else if (_geo == "tb_text") TbText(g, c.R, t, a);
                 else if (_geo.StartsWith("tb_stack")) Stack(g, c.R, t, a, _geo == "tb_stack");
@@ -564,6 +589,53 @@ namespace BatteryWidget
             if (_labels) Label(g, new RectangleF(x, r.Top, _lw + 2, r.Height), t, _lp, a);
             var big = Fonts.Get(_fp, FontStyle.Regular, true, true);
             Value(g, r.Right - _vw, r.Top + r.Height / 2 + (Fonts.Ascent(big) - Fonts.Descent(big)) / 2, t, _fp, a, "right", _vw);
+        }
+
+        /// <summary>Text with a soft shadow when there's no background, so it reads on any wallpaper.</summary>
+        void Shadowed(Graphics g, string text, Font f, Color c, float x, float baseY, bool gold = false)
+        {
+            if (!C.Bool("background", true))
+                using (var sb = new SolidBrush(Color.FromArgb((int)(c.A * 0.6), 0, 0, 0))) Fonts.Text(g, text, f, sb, x, baseY + Math.Max(1, S));
+            float w = Fonts.Width(g, text, f);
+            using (var b = gold && Pal.Metal ? Draw.Gold(new RectangleF(x, baseY - Fonts.Ascent(f), Math.Max(1, w), Fonts.Ascent(f) * 1.1f)) : (Brush)new SolidBrush(c)) Fonts.Text(g, text, f, b, x, baseY);
+        }
+
+        void ValueAt(Graphics g, float x, float baseY, Tile t, float fp, float a, bool alignRight)
+        {
+            var big = Fonts.Get(fp, FontStyle.Regular, true, true); var small = Fonts.Get(fp * 0.62f, FontStyle.Regular, true);
+            string text = t.Online ? t.Text : "–", unit = t.Online ? t.Unit ?? "" : "";
+            float tw = Fonts.Width(g, text, big) + (unit != "" ? Fonts.Width(g, unit, small) + fp * 0.06f : 0);
+            if (alignRight) x -= tw;
+            Shadowed(g, text, big, F(TileValue(t), a), x, baseY, GoldFor(t));
+            if (unit != "") Shadowed(g, unit, small, F(Pal.Sub, a), x + Fonts.Width(g, text, big) + fp * 0.06f, baseY);
+        }
+
+        void MinimalRow(Graphics g, RectangleF r, Tile t, float a, bool bar)
+        {
+            float s = S, mid = bar ? r.Top + 14 * s : r.Top + r.Height / 2;
+            var lf = Fonts.Get(_lp);
+            Shadowed(g, Fonts.Elide(g, t.Label, lf, r.Width - _vw - 12 * s), lf, F(Pal.Sub, a), r.Left, mid + (Fonts.Ascent(lf) - Fonts.Descent(lf)) / 2);
+            var big = Fonts.Get(_fp, FontStyle.Regular, true, true);
+            ValueAt(g, r.Right, mid + (Fonts.Ascent(big) - Fonts.Descent(big)) / 2, t, _fp, a, true);
+            if (!bar) return;
+            var track = new RectangleF(r.Left, r.Top + 25 * s, r.Width, 3 * s);
+            using (var tb = new SolidBrush(F(Pal.Track, a))) using (var p = Draw.Round(track, 1.5f * s)) g.FillPath(tb, p);
+            if (t.Frac > 0)
+            {
+                var fr = new RectangleF(track.X, track.Y, Math.Max(track.Height, (float)(track.Width * t.Frac.Value)), track.Height);
+                using (var fb = GoldFor(t) ? Draw.Gold(fr) : (Brush)new SolidBrush(F(TileRing(t), a))) using (var p = Draw.Round(fr, 1.5f * s)) g.FillPath(fb, p);
+            }
+        }
+
+        void BigTile(Graphics g, RectangleF r, Tile t, float a)
+        {
+            float s = S;
+            var lf = Fonts.Get(_lp);
+            float lb = r.Top + _lp * 1.1f;
+            Color ic = !string.IsNullOrEmpty(t.Color) ? Theme.C(t.Color) : TileRing(t);
+            Draw.SysIcon(g, t.Kind, new RectangleF(r.Left, lb - _isz * 0.85f, _isz, _isz), F(ic, a));
+            Shadowed(g, Fonts.Elide(g, t.Label, lf, r.Width - _isz - 5 * s), lf, F(Pal.Sub, a), r.Left + _isz + 5 * s, lb);
+            ValueAt(g, r.Left, r.Top + _lp * 1.6f + Fonts.Ascent(Fonts.Get(_fp, FontStyle.Regular, true, true)) * 0.98f, t, _fp, a, false);
         }
 
         void TbIcon(Graphics g, RectangleF r, Tile t, float a)
@@ -846,12 +918,15 @@ namespace BatteryWidget
                 Menus.Item(li, "Card (CPU panel, history, network, memory)", () => Set("style", "card"), style == "card");
                 Menus.Item(li, "Rings (icon, value, label)", () => Set("style", "rings"), style == "rings");
                 Menus.Item(li, "Text (label and value)", () => Set("style", "text"), style == "text");
+                Menus.Item(li, "Minimal (just the numbers)", () => { C["background"] = false; Set("style", "minimal"); }, style == "minimal");
+                Menus.Item(li, "Lines (number with a thin bar)", () => Set("style", "lines"), style == "lines");
+                Menus.Item(li, "Tiles (big numbers in a grid)", () => Set("style", "tiles"), style == "tiles");
             }
             Menus.Sep(li);
             if (!TaskbarMode && style != "card")
             {
                 int cols = C.Int("columns");
-                foreach (var p in new[] { new[] { "0", "One row" }, new[] { "1", "One column" }, new[] { "2", "Grid – 2 columns" }, new[] { "3", "Grid – 3 columns" }, new[] { "4", "Grid – 4 columns" } })
+                if (style != "minimal" && style != "lines") foreach (var p in new[] { new[] { "0", "One row" }, new[] { "1", "One column" }, new[] { "2", "Grid – 2 columns" }, new[] { "3", "Grid – 3 columns" }, new[] { "4", "Grid – 4 columns" } })
                 { int v = int.Parse(p[0]); Menus.Item(li, p[1], () => Set("columns", v), cols == v); }
                 Menus.Sep(li);
                 Menus.Item(li, "Background", () => Set("background", !C.Bool("background", true)), C.Bool("background", true));

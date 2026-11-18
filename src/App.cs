@@ -10,14 +10,14 @@ using System.Windows.Forms;
 [assembly: System.Reflection.AssemblyTitle("Battery Widget")]
 [assembly: System.Reflection.AssemblyProduct("Battery Widget")]
 [assembly: System.Reflection.AssemblyDescription("Battery levels for wireless gear + a system monitor")]
-[assembly: System.Reflection.AssemblyVersion("4.1.3.0")]
-[assembly: System.Reflection.AssemblyFileVersion("4.1.3.0")]
+[assembly: System.Reflection.AssemblyVersion("4.1.4.0")]
+[assembly: System.Reflection.AssemblyFileVersion("4.1.4.0")]
 
 namespace BatteryWidget
 {
     public static class Program
     {
-        public const string Version = "4.1.3";
+        public const string Version = "4.1.4";
         public const string AppId = "BatteryWidget";
         static Icon _icon;
         public static Icon AppIcon => _icon ?? (_icon = Draw.MakeIcon(32));
@@ -78,11 +78,15 @@ namespace BatteryWidget
         public WeatherView Weather;
         public NotifyIcon Tray;
         readonly bool _demo;
+        /// <summary>Runs work from other threads on the UI thread – always exists, even when a widget is switched off.</summary>
+        public readonly Control Ui = new Control();
+        public void OnUi(Action a) { try { if (Ui.IsHandleCreated && !Ui.IsDisposed) Ui.BeginInvoke(a); } catch { } }
 
         public Suite(Cfg cfg, bool demo) { Cfg = cfg; _demo = demo; }
 
         public void Start()
         {
+            Ui.CreateControl(); var uiHandle = Ui.Handle;
             if (!_demo && Cfg.NumOrNull("privacy_seen") == null)            // first start: what goes online, and the choice
                 using (var f = new PrivacyForm(this, Themes.Resolve(Cfg.Str("theme", "Dark") == "Auto" ? "Dark" : Cfg.Str("theme", "Dark"), Cfg.Str("accent", ""), false, true))) f.ShowDialog();
             Tray = new NotifyIcon { Icon = Program.AppIcon, Text = "Battery Widget", Visible = true, ContextMenuStrip = new ContextMenuStrip() };
@@ -132,14 +136,17 @@ namespace BatteryWidget
             {
                 Updater.Release r = null; string err = null;
                 try { r = Updater.Latest(repo); } catch (Exception ex) { err = ex.Message; }
-                Battery.BeginInvoke((Action)(() =>
+                OnUi(() =>
                 {
                     _checking = false;
-                    if (r != null && r.Url != null && !string.IsNullOrEmpty(r.Sha256) && Updater.Newer(r.Version, Program.Version) && (manual || Cfg.Str("update_skip", "") != r.Version))
+                    bool newer = r != null && Updater.Newer(r.Version, Program.Version), ready = r != null && r.Url != null && !string.IsNullOrEmpty(r.Sha256);
+                    if (newer && ready && (manual || Cfg.Str("update_skip", "") != r.Version))
                         new UpdateForm(this, r, Battery.MenuTheme).Show();
+                    else if (manual && newer && !ready)
+                        Toast.Show("up", r.Version + " is published", "Its BatteryWidget.exe isn't attached yet – try again in a few minutes.", Battery.MenuTheme, 5000);
                     else if (manual)
                         Toast.Show("up", err != null ? "Couldn't check for updates" : "You have the latest version", err ?? "Battery Widget " + Program.Version, Battery.MenuTheme, 4000);
-                }));
+                });
             }) { IsBackground = true }.Start();
         }
 
